@@ -127,16 +127,16 @@ extern logPrintFunc globalCustomLogPrintFn;
 #define DLOGV(fmt, ...) __LOG(LOG_LEVEL_VERBOSE, (PCHAR) LOG_CLASS, (PCHAR) fmt, ##__VA_ARGS__)
 #endif
 #ifndef ENTER
-#define ENTER() DLOGV("Enter")
+#define ENTER() DLOGV("%s(%d) Enter", __func__, __LINE__)
 #endif
 #ifndef LEAVE
-#define LEAVE() DLOGV("Leave")
+#define LEAVE() DLOGV("%s(%d) Leave", __func__, __LINE__)
 #endif
 #ifndef ENTERS
-#define ENTERS() DLOGS("Enter")
+#define ENTERS() DLOGS("%s(%d) Enters", __func__, __LINE__)
 #endif
 #ifndef LEAVES
-#define LEAVES() DLOGS("Leave")
+#define LEAVES() DLOGS("%s(%d) Leaves", __func__, __LINE__)
 #endif
 
 #define DLOGD_LINE() DLOGD("%s(%d)", __func__, __LINE__)

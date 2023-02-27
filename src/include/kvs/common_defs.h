@@ -477,7 +477,12 @@ typedef struct stat STAT_STRUCT;
 //
 // Environment variables
 //
+#ifdef ENABLE_HEADER_CONFIG_CLIENT_INFO
+#include "cmake_config_aws.h"
+#define GETENV aws_env_value_by_key
+#else
 #define GETENV getenv
+#endif
 
 //
 // Pseudo-random functionality

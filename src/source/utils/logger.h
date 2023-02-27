@@ -23,7 +23,7 @@ extern "C" {
 #include "kvs/error.h"
 
 // Max log message length
-#define MAX_LOG_FORMAT_LENGTH 2048
+#define MAX_LOG_FORMAT_LENGTH   (5 * 1024)
 
 // Set the global log level
 #define SET_LOGGER_LOG_LEVEL(l) loggerSetLogLevel((l))

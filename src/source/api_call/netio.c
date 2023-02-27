@@ -156,6 +156,14 @@ static int prvConnect(NetIo_t* pxNet, const char* pcHost, const char* pcPort, co
     return xRes;
 }
 
+#ifdef MBEDTLS_DEBUG_LOG
+static void ssl_debug(void *ctx, int level, const char *file, int line, const char *str)
+{
+    DLOGD("%s: %d, %s.\n", file, line, str);
+    return;
+}
+#endif
+
 NetIoHandle NetIo_create(void)
 {
     NetIo_t* pxNet = NULL;
@@ -168,6 +176,11 @@ NetIoHandle NetIo_create(void)
         mbedtls_ssl_config_init(&(pxNet->xConf));
         mbedtls_ctr_drbg_init(&(pxNet->xCtrDrbg));
         mbedtls_entropy_init(&(pxNet->xEntropy));
+
+#ifdef MBEDTLS_DEBUG_LOG
+        mbedtls_debug_set_threshold(1);
+        mbedtls_ssl_conf_dbg(&(pxNet->xConf), ssl_debug, NULL);
+#endif
 
         pxNet->uRecvTimeoutMs = DEFAULT_CONNECTION_TIMEOUT_MS;
         pxNet->uSendTimeoutMs = DEFAULT_CONNECTION_TIMEOUT_MS;

@@ -6,6 +6,14 @@
 #include "io_buffer.h"
 #include "Rtp.h"
 
+#ifdef MBEDTLS_DEBUG_LOG
+static void ssl_debug(void *ctx, int level, const char *file, int line, const char *str)
+{
+    DLOGD("%s: %d, %s.\n", file, line, str);
+    return;
+}
+#endif
+
 STATUS tls_session_create(PTlsSessionCallbacks pCallbacks, PTlsSession* ppTlsSession)
 {
     ENTERS();
@@ -27,6 +35,12 @@ STATUS tls_session_create(PTlsSessionCallbacks pCallbacks, PTlsSession* ppTlsSes
     mbedtls_x509_crt_init(&pTlsSession->cacert);
     mbedtls_ssl_config_init(&pTlsSession->sslCtxConfig);
     mbedtls_ssl_init(&pTlsSession->sslCtx);
+
+#ifdef MBEDTLS_DEBUG_LOG
+    mbedtls_debug_set_threshold(1);
+    mbedtls_ssl_conf_dbg(&pTlsSession->sslCtxConfig, ssl_debug, NULL);
+#endif
+
     CHK(mbedtls_ctr_drbg_seed(&pTlsSession->ctrDrbg, mbedtls_entropy_func, &pTlsSession->entropy, NULL, 0) == 0, STATUS_TLS_CREATE_SSL_FAILED);
     CHK(mbedtls_x509_crt_parse_file(&pTlsSession->cacert, DEFAULT_KVS_CACERT_PATH) == 0, STATUS_TLS_INVALID_CA_CERT_PATH);
 

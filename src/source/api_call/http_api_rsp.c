@@ -20,8 +20,8 @@
 #include "channel_info.h"
 #include "auth.h"
 
-#define HTTP_RSP_ENTER() // DLOGD("enter")
-#define HTTP_RSP_EXIT()  // DLOGD("exit")
+#define HTTP_RSP_ENTER()  // ENTER()
+#define HTTP_RSP_EXIT()   // LEAVE()
 
 /******************************************************************************
  * FUNCTION

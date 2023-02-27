@@ -269,6 +269,9 @@ endif()
 # Uncomment below line for very verbose logging
 # add_definitions(-DLOG_STREAMING)
 
+# Uncomment below line for mbedtls debug log
+# add_definitions(-DMBEDTLS_DEBUG_LOG)
+
 if(BUILD_CLIENT)
   add_definitions(-DBUILD_CLIENT)
 endif()

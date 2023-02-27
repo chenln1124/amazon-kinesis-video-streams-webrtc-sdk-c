@@ -25,8 +25,8 @@
 /******************************************************************************
  * DEFINITION
  ******************************************************************************/
-#define HTTP_API_ENTER() // DLOGD("%s(%d) enter", __func__, __LINE__)
-#define HTTP_API_EXIT()  // DLOGD("%s(%d) exit", __func__, __LINE__)
+#define HTTP_API_ENTER()  // ENTER()
+#define HTTP_API_EXIT()   // LEAVE()
 
 #define HTTP_API_SECURE_PORT          "443"
 #define HTTP_API_CONNECTION_TIMEOUT   (2 * HUNDREDS_OF_NANOS_IN_A_SECOND)

@@ -27,8 +27,8 @@
 /******************************************************************************
  * DEFINITION
  ******************************************************************************/
-#define WSS_API_ENTER() // DLOGD("%s enter", __func__);
-#define WSS_API_EXIT()  // DLOGD("%s exit", __func__);
+#define WSS_API_ENTER()   // ENTER()
+#define WSS_API_EXIT()    // LEAVE()
 
 #define WSS_API_SECURE_PORT                "443"
 #define WSS_API_CONNECTION_TIMEOUT         (2 * HUNDREDS_OF_NANOS_IN_A_SECOND)

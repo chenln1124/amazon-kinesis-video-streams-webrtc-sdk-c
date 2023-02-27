@@ -32,8 +32,8 @@
 /******************************************************************************
  * DEFINITIONS
  ******************************************************************************/
-#define WSS_CLIENT_ENTER() // DLOGD("%s(%d) enter", __func__, __LINE__)
-#define WSS_CLIENT_EXIT()  // DLOGD("%s(%d) exit", __func__, __LINE__);
+#define WSS_CLIENT_ENTER()   // ENTER()
+#define WSS_CLIENT_EXIT()    // LEAVE()
 
 #define IO_LOCK(pWssClientCtx)   MUTEX_LOCK(pWssClientCtx->ioLock)
 #define IO_UNLOCK(pWssClientCtx) MUTEX_UNLOCK(pWssClientCtx->ioLock)

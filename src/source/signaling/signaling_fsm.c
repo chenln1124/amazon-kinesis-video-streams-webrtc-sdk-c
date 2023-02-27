@@ -22,10 +22,10 @@
 /******************************************************************************
  * DEFINITION
  ******************************************************************************/
-#define SIGNALING_FSM_ENTER()  // DLOGD("%s enter", __func__)
-#define SIGNALING_FSM_LEAVE()  // DLOGD("%s leave", __func__)
-#define SIGNALING_FSM_ENTERS() // DLOGD("%s enters", __func__)
-#define SIGNALING_FSM_LEAVES() // DLOGD("%s leaves", __func__)
+#define SIGNALING_FSM_ENTER()    // ENTER()
+#define SIGNALING_FSM_LEAVE()    // LEAVE()
+#define SIGNALING_FSM_ENTERS()   // ENTERS()
+#define SIGNALING_FSM_LEAVES()   // LEAVES()
 
 #define SIGNALING_STATE_NEW_REQUIRED (SIGNALING_STATE_NONE | SIGNALING_STATE_NEW)
 #define SIGNALING_STATE_GET_TOKEN_REQUIRED                                                                                                           \
