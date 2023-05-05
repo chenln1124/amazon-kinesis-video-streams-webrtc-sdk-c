@@ -100,8 +100,26 @@ VOID defaultLogPrint(UINT32 level, PCHAR tag, PCHAR fmt, ...)
 
         va_list valist;
         va_start(valist, fmt);
+#ifdef KVS_PLAT_ANYKE_FREERTOS
+        vsnprintf(logFmtString, MAX_LOG_FORMAT_LENGTH, fmt, valist);
+#else
         vprintf(logFmtString, valist);
+#endif
         va_end(valist);
+
+#ifdef KVS_PLAT_ANYKE_FREERTOS
+        int slen = strlen(logFmtString);
+        for(int i = 0; i < slen; i++)
+        {
+            if(logFmtString[i] == '\n')
+            {
+                putch('\r');
+            }
+            putch(logFmtString[i]);
+        }
+        putch('\n');
+        putch('\r');
+#endif
     }
     MEMFREE(logFmtString);
     MUTEX_UNLOCK(logLock);

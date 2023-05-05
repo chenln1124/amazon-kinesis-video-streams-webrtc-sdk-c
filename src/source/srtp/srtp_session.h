@@ -28,7 +28,7 @@ extern "C" {
 #include "kvs/platform_utils.h"
 #include "crypto.h"
 #ifdef ENABLE_STREAMING
-#ifdef KVS_PLAT_ESP_FREERTOS
+#if defined (KVS_PLAT_ESP_FREERTOS) || defined(KVS_PLAT_ANYKE_FREERTOS)
 #include <srtp.h>
 #else
 #include <srtp2/srtp.h>

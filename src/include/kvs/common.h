@@ -201,8 +201,10 @@ extern "C" {
 #ifdef CMAKE_DETECTED_CACERT_PATH
 #define DEFAULT_KVS_CACERT_PATH KVS_CA_CERT_PATH
 #else
-#ifdef KVS_PLAT_ESP_FREERTOS
+#if defined (KVS_PLAT_ESP_FREERTOS)
 #define DEFAULT_KVS_CACERT_PATH "/sdcard/cert.pem"
+#elif defined (KVS_PLAT_ANYKE_FREERTOS)
+#define DEFAULT_KVS_CACERT_PATH "/mnt/cert.pem"
 #else
 #define DEFAULT_KVS_CACERT_PATH EMPTY_STRING
 #endif

@@ -151,11 +151,11 @@ STATUS net_getLocalhostIpAddresses(PKvsIpAddress destIpList, PUINT32 pDestIpList
     }
 #else
     //#error "need to add the network interface."
-    extern char* esp_get_ip(void);
+    extern char* app_get_ip(void);
     destIpList[ipCount].isPointToPoint = 0;
     destIpList[ipCount].family = KVS_IP_FAMILY_TYPE_IPV4;
     destIpList[ipCount].port = 0;
-    MEMCPY(destIpList[ipCount].address, esp_get_ip(), IPV4_ADDRESS_LENGTH);
+    MEMCPY(destIpList[ipCount].address, app_get_ip(), IPV4_ADDRESS_LENGTH);
     DLOGD("Acquried IP: %d.%d.%d.%d", destIpList[ipCount].address[0], destIpList[ipCount].address[1], destIpList[ipCount].address[2],
           destIpList[ipCount].address[3]);
     ipCount++;
@@ -492,7 +492,7 @@ PCHAR net_getErrorString(INT32 error)
 }
 #endif
 
-#ifdef KVS_PLAT_ESP_FREERTOS
+#if defined (KVS_PLAT_ESP_FREERTOS) || defined (KVS_PLAT_ANYKE_FREERTOS)
 PCHAR net_getGaiStrRrror(INT32 error)
 {
     return "gai_strerror(errCode) not supported.";

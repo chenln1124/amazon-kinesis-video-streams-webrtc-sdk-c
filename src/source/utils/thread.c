@@ -233,18 +233,18 @@ PUBLIC_API STATUS defaultCreateThreadEx(PTID pThreadId, PCHAR threadName, UINT32
         DLOGW("set the esp pthread cfg failed.");
     }
 
-    if (joinable == TRUE) {
-        pthread_attr_setdetachstate(pAttr, PTHREAD_CREATE_JOINABLE);
-    } else {
-        pthread_attr_setdetachstate(pAttr, PTHREAD_CREATE_DETACHED);
-    }
-
     if (threadSize == 0) {
         pthread_attr_setstacksize(pAttr, DEFAULT_THREAD_SIZE);
     } else {
         pthread_attr_setstacksize(pAttr, threadSize);
     }
 #endif
+
+    if (joinable == TRUE) {
+        pthread_attr_setdetachstate(pAttr, PTHREAD_CREATE_JOINABLE);
+    } else {
+        pthread_attr_setdetachstate(pAttr, PTHREAD_CREATE_DETACHED);
+    }
 
     result = pthread_create(&threadId, pAttr, start, args);
 

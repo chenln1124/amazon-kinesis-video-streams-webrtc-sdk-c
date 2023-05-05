@@ -29,10 +29,15 @@ option(MEMORY_SANITIZER "Build with MemorySanitizer." OFF)
 option(THREAD_SANITIZER "Build with ThreadSanitizer." OFF)
 option(UNDEFINED_BEHAVIOR_SANITIZER "Build with UndefinedBehaviorSanitizer." OFF)
 
-option(KVS_PLAT_ESP_FREERTOS "Build for ESP FreeRTOS" OFF)
+option(KVS_PLAT_ESP_FREERTOS   "Build for ESP FreeRTOS"   OFF)
+option(KVS_PLAT_ANYKE_FREERTOS "Build for ANYKE FreeRTOS" OFF)
 
 if(KVS_PLAT_ESP_FREERTOS)
   add_definitions(-DKVS_PLAT_ESP_FREERTOS)
+endif()
+
+if(KVS_PLAT_ANYKE_FREERTOS)
+  add_definitions(-DKVS_PLAT_ANYKE_FREERTOS)
 endif()
 
 if(NOT WIN32)
@@ -154,13 +159,13 @@ if (USE_OPENSSL)
   find_package(OpenSSL REQUIRED)
   set(OPEN_SRC_INCLUDE_DIRS ${OPEN_SRC_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR})
 else()
-  if(NOT KVS_PLAT_ESP_FREERTOS)
+  if(NOT KVS_PLAT_ESP_FREERTOS AND NOT KVS_PLAT_ANYKE_FREERTOS)
     find_package(MbedTLS REQUIRED)
     set(OPEN_SRC_INCLUDE_DIRS ${OPEN_SRC_INCLUDE_DIRS} ${MBEDTLS_INCLUDE_DIRS})
   endif()
 endif()
 
-if (ENABLE_STREAMING AND NOT KVS_PLAT_ESP_FREERTOS)
+if (ENABLE_STREAMING AND NOT KVS_PLAT_ESP_FREERTOS AND NOT KVS_PLAT_ANYKE_FREERTOS)
   if (OPEN_SRC_INSTALL_PREFIX)
     find_library(LLHTTP_LIBRARIES llhttp REQUIRED PATHS ${OPEN_SRC_INSTALL_PREFIX})
   else()
@@ -168,7 +173,7 @@ if (ENABLE_STREAMING AND NOT KVS_PLAT_ESP_FREERTOS)
   endif()
 endif()
 
-if (ENABLE_STREAMING AND NOT KVS_PLAT_ESP_FREERTOS)
+if (ENABLE_STREAMING AND NOT KVS_PLAT_ESP_FREERTOS AND NOT KVS_PLAT_ANYKE_FREERTOS)
   if (OPEN_SRC_INSTALL_PREFIX)
     find_library(WSLAY_LIBRARIES wslay REQUIRED PATHS ${OPEN_SRC_INSTALL_PREFIX})
   else()
@@ -176,7 +181,7 @@ if (ENABLE_STREAMING AND NOT KVS_PLAT_ESP_FREERTOS)
   endif()
 endif()
 
-if (ENABLE_STREAMING AND NOT KVS_PLAT_ESP_FREERTOS)
+if (ENABLE_STREAMING AND NOT KVS_PLAT_ESP_FREERTOS AND NOT KVS_PLAT_ANYKE_FREERTOS)
   if (OPEN_SRC_INSTALL_PREFIX)
     find_library(SRTP_LIBRARIES srtp2 REQUIRED PATHS ${OPEN_SRC_INSTALL_PREFIX})
   else()
@@ -186,7 +191,7 @@ endif()
 
 if(ENABLE_DATA_CHANNEL)
   # usrsctp dont support pkgconfig yet
-  if(NOT KVS_PLAT_ESP_FREERTOS)
+  if(NOT KVS_PLAT_ESP_FREERTOS AND NOT KVS_PLAT_ANYKE_FREERTOS)
     find_library(
       Usrsctp
       NAMES ${USRSCTP_LIBNAME} usrsctp REQUIRED
@@ -319,10 +324,17 @@ include_directories(${KINESIS_VIDEO_WEBRTC_CLIENT_SRC}/src/include)
 
 add_library(kvsWebrtcStateMachine STATIC ${WEBRTC_STATE_MACHINE_SOURCE_FILES})
 target_link_libraries(kvsWebrtcStateMachine)
+if(KVS_PLAT_ANYKE_FREERTOS)
+  set(PLATFORM_LIBRARY_DIRS ${CMAKE_SOURCE_DIR}/../../os)
+  target_link_libraries(kvsWebrtcStateMachine PRIVATE ${PLATFORM_LIBRARY_DIRS}/libfreertos.a c)
+endif()
 
 add_library(kvsWebrtcUtils STATIC ${WEBRTC_UTILS_SOURCE_FILES})
 
 target_link_libraries(kvsWebrtcUtils ${CMAKE_THREAD_LIBS_INIT})
+if(KVS_PLAT_ANYKE_FREERTOS)
+  target_link_libraries(kvsWebrtcUtils PRIVATE ${PLATFORM_LIBRARY_DIRS}/libfreertos.a c)
+endif()
 
 if(UNIX AND NOT APPLE)
   # rt needed for clock_gettime
@@ -398,9 +410,18 @@ install(TARGETS kvsWebrtcSignalingClient
   ARCHIVE DESTINATION lib
 )
 
+if(KVS_PLAT_ANYKE_FREERTOS)
+install(TARGETS kvsWebrtcUtils kvsWebrtcStateMachine
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+)
+endif()
+
+if(NOT KVS_PLAT_ANYKE_FREERTOS)
 install(DIRECTORY ${KINESIS_VIDEO_WEBRTC_CLIENT_SRC}/src/include/
   DESTINATION include
 )
+endif()
 
 if (BUILD_SAMPLE)
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/samples/opusSampleFrames" DESTINATION .)

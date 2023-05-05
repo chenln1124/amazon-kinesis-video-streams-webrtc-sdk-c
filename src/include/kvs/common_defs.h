@@ -390,7 +390,13 @@ typedef INT_PTR SSIZE_T, *PSSIZE_T;
 #include <stdarg.h>
 #include <stdio.h>
 #include <sys/stat.h>
+#ifdef KVS_PLAT_ANYKE_FREERTOS
+#include "lwip/errno.h"
+#include "FreeRTOS.h"
+#include "queue.h"
+#else
 #include <errno.h>
+#endif
 
 #include <ctype.h>
 #define TOLOWER    tolower
@@ -477,7 +483,12 @@ typedef struct stat STAT_STRUCT;
 //
 // Environment variables
 //
+#ifdef ENABLE_HEADER_CONFIG_CLIENT_INFO
+#include "cmake_config_aws.h"
+#define GETENV aws_env_value_by_key
+#else
 #define GETENV getenv
+#endif
 
 //
 // Pseudo-random functionality
@@ -553,6 +564,12 @@ typedef struct stat STAT_STRUCT;
 #define FSCANF fscanf
 #endif
 
+#ifdef KVS_PLAT_ANYKE_FREERTOS
+#define select  lwip_select
+#define fcntl   lwip_fcntl
+#define close   lwip_close
+#endif
+
 #if defined _WIN32 || defined _WIN64 || defined __CYGWIN__
 #define FPATHSEPARATOR     '\\'
 #define FPATHSEPARATOR_STR "\\"
@@ -618,6 +635,12 @@ typedef UINT64 HANDLE;
 #endif
 #ifndef HANDLE_TO_POINTER
 #define HANDLE_TO_POINTER(h) ((PBYTE)(h))
+#endif
+
+#ifdef KVS_PLAT_ANYKE_FREERTOS
+#ifndef typeof
+#define typeof(x) __typeof__(x)
+#endif
 #endif
 
 /******************************************************************************
