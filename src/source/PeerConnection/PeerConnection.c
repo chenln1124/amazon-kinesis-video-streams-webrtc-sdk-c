@@ -1388,6 +1388,7 @@ STATUS pc_addIceCandidate(PRtcPeerConnection pPeerConnection, PCHAR pIceCandidat
 
     CHK(pKvsPeerConnection != NULL && pIceCandidate != NULL, STATUS_PEER_CONN_NULL_ARG);
 
+    // DLOGD("%s", pIceCandidate);
     ice_agent_addRemoteCandidate(pKvsPeerConnection->pIceAgent, pIceCandidate);
 
 CleanUp:

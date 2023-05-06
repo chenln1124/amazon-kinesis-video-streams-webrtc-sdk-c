@@ -340,6 +340,9 @@ STATUS sdp_populateSingleMediaSection(PKvsPeerConnection pKvsPeerConnection, PKv
     PRtcMediaStreamTrack pRtcMediaStreamTrack = &(pKvsRtpTransceiver->sender.track);
     PSdpMediaDescription pSdpMediaDescriptionRemote;
     PCHAR currentFmtp = NULL;
+    CHAR remoteSdpAttributeValue[MAX_SDP_ATTRIBUTE_VALUE_LENGTH];
+
+    MEMSET(remoteSdpAttributeValue, 0, MAX_SDP_ATTRIBUTE_VALUE_LENGTH);
 
     CHK_STATUS(hash_table_get(pKvsPeerConnection->pCodecTable, pRtcMediaStreamTrack->codec, &payloadType));
     // get the payload type of audio or video.
@@ -458,7 +461,22 @@ STATUS sdp_populateSingleMediaSection(PKvsPeerConnection pKvsPeerConnection, PKv
     attributeCount++;
 
     STRNCPY(pSdpMediaDescription->sdpAttributes[attributeCount].attributeName, "mid", MAX_SDP_ATTRIBUTE_NAME_LENGTH);
-    SNPRINTF(pSdpMediaDescription->sdpAttributes[attributeCount].attributeValue, MAX_SDP_ATTRIBUTE_VALUE_LENGTH, "%d", mediaSectionId);
+    // check all session attribute lines to see if a line with mid is present. If it is present, copy its content and break
+    for (i = 0; i < pRemoteSessionDescription->mediaDescriptions[mediaSectionId].mediaAttributesCount; i++) {
+        if (STRCMP(pRemoteSessionDescription->mediaDescriptions[mediaSectionId].sdpAttributes[i].attributeName, MID_KEY) == 0) {
+            STRCPY(remoteSdpAttributeValue, pRemoteSessionDescription->mediaDescriptions[mediaSectionId].sdpAttributes[i].attributeValue);
+            break;
+        }
+    }
+
+    // check if we already have a value for the "mid" session attribute from remote description. If we have it, we use it.
+    // If we don't have it, we loop over, create and add them
+    if (STRLEN(remoteSdpAttributeValue) > 0) {
+        CHK(STRLEN(remoteSdpAttributeValue) < MAX_SDP_ATTRIBUTE_VALUE_LENGTH, STATUS_BUFFER_TOO_SMALL);
+        SPRINTF(pSdpMediaDescription->sdpAttributes[attributeCount].attributeValue, "%s", remoteSdpAttributeValue);
+    } else {
+        SNPRINTF(pSdpMediaDescription->sdpAttributes[attributeCount].attributeValue, MAX_SDP_ATTRIBUTE_VALUE_LENGTH, "%d", mediaSectionId);
+    }
     attributeCount++;
     // setup the direction of offer.
     if (pKvsPeerConnection->isOffer) {
@@ -501,16 +519,23 @@ STATUS sdp_populateSingleMediaSection(PKvsPeerConnection pKvsPeerConnection, PKv
     STRNCPY(pSdpMediaDescription->sdpAttributes[attributeCount].attributeName, "rtcp-mux", MAX_SDP_ATTRIBUTE_NAME_LENGTH);
     attributeCount++;
 
-    STRNCPY(pSdpMediaDescription->sdpAttributes[attributeCount].attributeName, "rtcp-rsize", MAX_SDP_ATTRIBUTE_NAME_LENGTH);
-    attributeCount++;
+    if (mediaSectionId != 0) {
+        STRNCPY(pSdpMediaDescription->sdpAttributes[attributeCount].attributeName, "rtcp-rsize", MAX_SDP_ATTRIBUTE_NAME_LENGTH);
+        attributeCount++;
+    }
 
     if (pRtcMediaStreamTrack->codec == RTC_CODEC_H264_PROFILE_42E01F_LEVEL_ASYMMETRY_ALLOWED_PACKETIZATION_MODE) {
-        if (pKvsPeerConnection->isOffer) {
+        // if (pKvsPeerConnection->isOffer) {
             currentFmtp = DEFAULT_H264_FMTP;
-        }
+        // }
         STRNCPY(pSdpMediaDescription->sdpAttributes[attributeCount].attributeName, "rtpmap", MAX_SDP_ATTRIBUTE_NAME_LENGTH);
         SNPRINTF(pSdpMediaDescription->sdpAttributes[attributeCount].attributeValue, MAX_SDP_ATTRIBUTE_VALUE_LENGTH, "%" PRId64 " H264/90000",
                  payloadType);
+        attributeCount++;
+
+        STRNCPY(pSdpMediaDescription->sdpAttributes[attributeCount].attributeName, "rtcp-fb", MAX_SDP_ATTRIBUTE_NAME_LENGTH);
+        SPRINTF(pSdpMediaDescription->sdpAttributes[attributeCount].attributeValue, "%" PRId64 " nack", payloadType);
+        SPRINTF(pSdpMediaDescription->sdpAttributes[attributeCount].attributeValue, "%" PRId64 " nack pli", payloadType);
         attributeCount++;
 
         if (currentFmtp != NULL) {
@@ -532,9 +557,9 @@ STATUS sdp_populateSingleMediaSection(PKvsPeerConnection pKvsPeerConnection, PKv
             attributeCount++;
         }
     } else if (pRtcMediaStreamTrack->codec == RTC_CODEC_OPUS) {
-        if (pKvsPeerConnection->isOffer) {
+        // if (pKvsPeerConnection->isOffer) {
             currentFmtp = DEFAULT_OPUS_FMTP;
-        }
+        // }
         STRNCPY(pSdpMediaDescription->sdpAttributes[attributeCount].attributeName, "rtpmap", MAX_SDP_ATTRIBUTE_NAME_LENGTH);
         SNPRINTF(pSdpMediaDescription->sdpAttributes[attributeCount].attributeValue, MAX_SDP_ATTRIBUTE_VALUE_LENGTH, "%" PRId64 " opus/48000/2",
                  payloadType);
@@ -576,8 +601,18 @@ STATUS sdp_populateSingleMediaSection(PKvsPeerConnection pKvsPeerConnection, PKv
         attributeCount++;
     }
 
+    STRNCPY(pSdpMediaDescription->sdpAttributes[attributeCount].attributeName, "ssrc", MAX_SDP_ATTRIBUTE_NAME_LENGTH);
+    SPRINTF(pSdpMediaDescription->sdpAttributes[attributeCount].attributeValue, "%u cname:%s", pKvsRtpTransceiver->sender.ssrc,
+            pKvsPeerConnection->localCNAME);
+    attributeCount++;
+
+    STRNCPY(pSdpMediaDescription->sdpAttributes[attributeCount].attributeName, "ssrc", MAX_SDP_ATTRIBUTE_NAME_LENGTH);
+    SPRINTF(pSdpMediaDescription->sdpAttributes[attributeCount].attributeValue, "%u msid:%s %s", pKvsRtpTransceiver->sender.ssrc,
+            pRtcMediaStreamTrack->streamId, pRtcMediaStreamTrack->trackId);
+    attributeCount++;
+
     STRNCPY(pSdpMediaDescription->sdpAttributes[attributeCount].attributeName, "rtcp-fb", MAX_SDP_ATTRIBUTE_NAME_LENGTH);
-    SNPRINTF(pSdpMediaDescription->sdpAttributes[attributeCount].attributeValue, MAX_SDP_ATTRIBUTE_VALUE_LENGTH, "%" PRId64 " nack", payloadType);
+    SNPRINTF(pSdpMediaDescription->sdpAttributes[attributeCount].attributeValue, MAX_SDP_ATTRIBUTE_VALUE_LENGTH, "%" PRId64 " goog-rem", payloadType);
     attributeCount++;
 
     pSdpMediaDescription->mediaAttributesCount = attributeCount;
@@ -738,9 +773,10 @@ STATUS sdp_populateSessionDescription(PKvsPeerConnection pKvsPeerConnection, PSe
 {
     ENTERS();
     STATUS retStatus = STATUS_SUCCESS;
-    CHAR bundleValue[MAX_SDP_ATTRIBUTE_VALUE_LENGTH], wmsValue[MAX_SDP_ATTRIBUTE_VALUE_LENGTH];
+    CHAR bundleValue[MAX_SDP_ATTRIBUTE_VALUE_LENGTH], wmsValue[MAX_SDP_ATTRIBUTE_VALUE_LENGTH], remoteSdpAttributeValue[MAX_SDP_ATTRIBUTE_VALUE_LENGTH];
     PCHAR curr = NULL;
     UINT32 i, sizeRemaining;
+    INT32 charsCopied;
 
     CHK(pKvsPeerConnection != NULL && pLocalSessionDescription != NULL && pRemoteSessionDescription != NULL, STATUS_NULL_ARG);
 
@@ -748,6 +784,7 @@ STATUS sdp_populateSessionDescription(PKvsPeerConnection pKvsPeerConnection, PSe
 
     MEMSET(bundleValue, 0, MAX_SDP_ATTRIBUTE_VALUE_LENGTH);
     MEMSET(wmsValue, 0, MAX_SDP_ATTRIBUTE_VALUE_LENGTH);
+    MEMSET(remoteSdpAttributeValue, 0, MAX_SDP_ATTRIBUTE_VALUE_LENGTH);
     /**
      * https://tools.ietf.org/html/rfc4566#section-5.2
      * Origin ==> o=<username> <sess-id> <sess-version> <nettype> <addrtype> <unicast-address>
@@ -771,16 +808,35 @@ STATUS sdp_populateSessionDescription(PKvsPeerConnection pKvsPeerConnection, PSe
     // setup the information of bundle media.
     STRNCPY(pLocalSessionDescription->sdpAttributes[0].attributeName, "group", MAX_SDP_ATTRIBUTE_NAME_LENGTH);
     STRNCPY(pLocalSessionDescription->sdpAttributes[0].attributeValue, BUNDLE_KEY, MAX_SDP_ATTRIBUTE_VALUE_LENGTH);
-    for (curr = (pLocalSessionDescription->sdpAttributes[0].attributeValue + ARRAY_SIZE(BUNDLE_KEY) - 1), i = 0;
-         i < pLocalSessionDescription->mediaCount; i++) {
+    // check all session attribute lines to see if a line with BUNDLE is present. If it is present, copy its content and break
+    for (i = 0; i < pRemoteSessionDescription->sessionAttributesCount; i++) {
+        if (STRSTR(pRemoteSessionDescription->sdpAttributes[i].attributeValue, BUNDLE_KEY) != NULL) {
+            STRCPY(remoteSdpAttributeValue, pRemoteSessionDescription->sdpAttributes[i].attributeValue + ARRAY_SIZE(BUNDLE_KEY) - 1);
+            break;
+        }
+    }
+    // check if we already have a value for the "group" session attribute from remote description. If we have it, we use it.
+    // If we don't have it, we loop over, create and add them
+    if (STRLEN(remoteSdpAttributeValue) > 0) {
+        CHK(STRLEN(remoteSdpAttributeValue) < MAX_SDP_ATTRIBUTE_VALUE_LENGTH, STATUS_BUFFER_TOO_SMALL);
+        STRCAT(pLocalSessionDescription->sdpAttributes[0].attributeValue, remoteSdpAttributeValue);
+    } else {
+        for (curr = (pLocalSessionDescription->sdpAttributes[0].attributeValue + ARRAY_SIZE(BUNDLE_KEY) - 1), i = 0;
+             i < pLocalSessionDescription->mediaCount; i++) {
+            sizeRemaining = MAX_SDP_ATTRIBUTE_VALUE_LENGTH - (curr - pLocalSessionDescription->sdpAttributes[0].attributeValue);
+            charsCopied = SNPRINTF(curr, sizeRemaining, " %d", i);
+            CHK(charsCopied > 0 && (UINT32) charsCopied < sizeRemaining, STATUS_BUFFER_TOO_SMALL);
+            curr += charsCopied;
+        }
+    }
+
+    for (i = 0; i < pLocalSessionDescription->mediaCount; i++) {
         STRNCPY(pLocalSessionDescription->mediaDescriptions[i].sdpConnectionInformation.networkType, "IN", MAX_SDP_NETWORK_TYPE_LENGTH);
         STRNCPY(pLocalSessionDescription->mediaDescriptions[i].sdpConnectionInformation.addressType, "IP4", MAX_SDP_ADDRESS_TYPE_LENGTH);
-        STRNCPY(pLocalSessionDescription->mediaDescriptions[i].sdpConnectionInformation.connectionAddress, "127.0.0.1",
-                MAX_SDP_CONNECTION_ADDRESS_LENGTH);
-
-        sizeRemaining = MAX_SDP_ATTRIBUTE_VALUE_LENGTH - (curr - pLocalSessionDescription->sdpAttributes[0].attributeValue);
-        curr += SNPRINTF(curr, sizeRemaining, " %d", i);
+        STRNCPY(pLocalSessionDescription->mediaDescriptions[i].sdpConnectionInformation.connectionAddress, "0.0.0.0",
+            MAX_SDP_CONNECTION_ADDRESS_LENGTH);
     }
+
     pLocalSessionDescription->sessionAttributesCount++;
     // a=msid-semantic
     // This attribute MUST be present if "a=msid" is used.

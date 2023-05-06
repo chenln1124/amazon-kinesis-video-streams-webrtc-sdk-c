@@ -89,6 +89,12 @@ static STATUS priv_signaling_cache_deserializeEntries(PCHAR cachedFileContent, U
                 case 5:
                     STRNCPY(pSignalingFileCacheEntryList[entryCount].wssEndpoint, pCurrent, nextToken - pCurrent);
                     break;
+                case 6:
+                    STRNCPY(pSignalingFileCacheEntryList[entryCount].storageStreamArn, pCurrent, nextToken - pCurrent);
+                    break;
+                case 7:
+                    STRNCPY(pSignalingFileCacheEntryList[entryCount].webrtcEndpoint, pCurrent, nextToken - pCurrent);
+                    break;
                 default:
                     break;
             }
@@ -245,10 +251,11 @@ STATUS signaling_cache_saveToFile(PSignalingFileCacheEntry pSignalingFileCacheEn
 
     for (i = 0; i < entryCount; ++i) {
         serializedCacheEntryLen = SNPRINTF(
-            pSerializedCacheEntries, MAX_SERIALIZED_SIGNALING_CACHE_ENTRY_LEN, "%s,%s,%s,%s,%s,%s,%.10" PRIu64 "\n", pFileCacheEntries[i].channelName,
+            pSerializedCacheEntries, MAX_SERIALIZED_SIGNALING_CACHE_ENTRY_LEN, "%s,%s,%s,%s,%s,%s,%s,%s,%.10" PRIu64 "\n", pFileCacheEntries[i].channelName,
             pFileCacheEntries[i].role == SIGNALING_CHANNEL_ROLE_TYPE_MASTER ? SIGNALING_FILE_CACHE_ROLE_TYPE_MASTER_STR
                                                                             : SIGNALING_FILE_CACHE_ROLE_TYPE_VIEWER_STR,
             pFileCacheEntries[i].region, pFileCacheEntries[i].channelArn, pFileCacheEntries[i].httpsEndpoint, pFileCacheEntries[i].wssEndpoint,
+            pFileCacheEntries[i].storageStreamArn, pFileCacheEntries[i].webrtcEndpoint,
             pFileCacheEntries[i].creationTsEpochSeconds);
         CHK_STATUS(
             fileio_write(DEFAULT_SIGNALING_CACHE_FILE_PATH, FALSE, i == 0 ? FALSE : TRUE, (PBYTE) pSerializedCacheEntries, serializedCacheEntryLen));

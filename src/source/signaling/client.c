@@ -149,6 +149,22 @@ CleanUp:
     return retStatus;
 }
 
+STATUS signaling_client_joinSession(SIGNALING_CLIENT_HANDLE signalingClientHandle)
+{
+    ENTERS();
+    STATUS retStatus = STATUS_SUCCESS;
+    PSignalingClient pSignalingClient = FROM_SIGNALING_CLIENT_HANDLE(signalingClientHandle);
+
+    DLOGV("Signaling Client Join Session Sync");
+    CHK_STATUS(signaling_joinSession(pSignalingClient));
+
+CleanUp:
+
+    SIGNALING_UPDATE_ERROR_COUNT(pSignalingClient, retStatus);
+    LEAVES();
+    return retStatus;
+}
+
 STATUS signaling_client_disconnect(SIGNALING_CLIENT_HANDLE signalingClientHandle)
 {
     ENTERS();
@@ -295,6 +311,14 @@ STATUS signaling_client_getStateString(SIGNALING_CLIENT_STATE state, PCHAR* ppSt
 
         case SIGNALING_CLIENT_STATE_DELETED:
             *ppStateStr = SIGNALING_CLIENT_STATE_DELETED_STR;
+            break;
+
+        case SIGNALING_CLIENT_STATE_DESCRIBE_MEDIA:
+            *ppStateStr = SIGNALING_CLIENT_STATE_DESCRIBE_MEDIA_STR;
+            break;
+
+        case SIGNALING_CLIENT_STATE_JOIN_SESSION:
+            *ppStateStr = SIGNALING_CLIENT_STATE_JOIN_SESSION_STR;
             break;
 
         case SIGNALING_CLIENT_STATE_MAX_VALUE:

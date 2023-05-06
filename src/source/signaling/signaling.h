@@ -37,6 +37,11 @@ extern "C" {
  */
 #define SIGNALING_CONNECT_STATE_TIMEOUT (15 * HUNDREDS_OF_NANOS_IN_A_SECOND)
 
+/**
+ * Default join session API timeout
+ */
+#define SIGNALING_JOIN_SESSION_STATE_TIMEOUT (15 * HUNDREDS_OF_NANOS_IN_A_SECOND)
+
 // Request id header name
 #define SIGNALING_REQUEST_ID_HEADER_NAME KVS_REQUEST_ID_HEADER_NAME ":"
 
@@ -63,6 +68,8 @@ extern "C" {
 #define SIGNALING_CLIENT_STATE_DISCONNECTED_STR    "Disconnected"
 #define SIGNALING_CLIENT_STATE_DELETE_STR          "Delete"
 #define SIGNALING_CLIENT_STATE_DELETED_STR         "Deleted"
+#define SIGNALING_CLIENT_STATE_DESCRIBE_MEDIA_STR  "Describe media storage"
+#define SIGNALING_CLIENT_STATE_JOIN_SESSION_STR    "Join Session"
 
 // Error refreshing ICE server configuration string
 #define SIGNALING_ICE_CONFIG_REFRESH_ERROR_MSG "Failed refreshing ICE server configuration with status code 0x%08x."
@@ -176,6 +183,9 @@ typedef struct {
     //!< http_api_rsp_getChannelEndpoint
     // Signaling endpoint
     CHAR channelEndpointHttps[MAX_SIGNALING_ENDPOINT_URI_LEN + 1];
+    // Media storage endpoint
+    CHAR channelEndpointWebrtc[MAX_SIGNALING_ENDPOINT_URI_LEN + 1];
+
     //!< http_api_rsp_getChannelEndpoint
     // #http_api_getIceConfig
     IceConfigInfo iceConfigs[MAX_ICE_CONFIG_COUNT];
@@ -208,6 +218,10 @@ typedef struct {
     SignalingApiCallHookFunc connectPostHookFn; //!< the post-hook function of connecting signaling channel.
     SignalingApiCallHookFunc deletePreHookFn;
     SignalingApiCallHookFunc deletePostHookFn;
+    SignalingApiCallHookFunc joinSessionPreHookFn;
+    SignalingApiCallHookFunc joinSessionPostHookFn;
+    SignalingApiCallHookFunc descirbeMediaStorageConfPreHookFn;
+    SignalingApiCallHookFunc descirbeMediaStorageConfPostHookFn;
 } SignalingClientInfoInternal, *PSignalingClientInfoInternal;
 
 /**
@@ -234,6 +248,8 @@ typedef struct {
     UINT64 getIceConfigTime;
     UINT64 deleteTime;
     UINT64 connectTime;
+    UINT64 describeMediaTime;
+    UINT64 joinSessionTime;
 } ApiCallHistory, *PApiCallHistory;
 
 /**
@@ -243,6 +259,19 @@ typedef struct {
     volatile SIZE_T apiCallStatus;  //!< Current service call result
     volatile ATOMIC_BOOL shutdown;  //!< Indicate the signaling is freed. Shutting down the entire client
     volatile ATOMIC_BOOL connected; //!< Indidcate the signaling is connected or not.
+
+    // The channel is being deleted
+    volatile ATOMIC_BOOL deleting;
+
+    // The channel is deleted
+    volatile ATOMIC_BOOL deleted;
+
+    // Retrieve the information of media storage configuration
+    volatile ATOMIC_BOOL describeMediaStorageConf;
+
+    // Join the media storage.
+    volatile ATOMIC_BOOL joinSession;
+
     // Having state machine logic rely on call result of HTTP_STATUS_SIGNALING_RECONNECT_ICE
     // to transition to ICE config state is not enough in Async update mode when
     // connect is in progress as the result of connect will override the result
@@ -263,6 +292,9 @@ typedef struct {
     PChannelInfo pChannelInfo;                         //!< Channel info
     SignalingChannelDescription channelDescription;    //!< Returned signaling channel description
     //!< the information from calling the api of describing the channel.
+
+    // Returned media storage session
+    MediaStorageConfig mediaStorageConfig;
 
     // Number of Ice Server objects
     UINT32 iceConfigCount;
@@ -369,6 +401,11 @@ STATUS signaling_channel_getIceConfig(PSignalingClient pSignalingClient, UINT64 
  * @return STATUS status of execution.
  */
 STATUS signaling_channel_connect(PSignalingClient pSignalingClient, UINT64 time);
+
+STATUS signaling_channel_joinStorageSession(PSignalingClient pSignalingClient, UINT64 time);
+
+STATUS signaling_channel_describeMediaStorageConf(PSignalingClient pSignalingClient, UINT64 time);
+
 /**
  * @brief delete the signaling channel. if signaling client is connected to the signaling channel, you need to terminate the connection first.
  *
@@ -414,6 +451,9 @@ STATUS signaling_fetch(PSignalingClient pSignalingClient);
  * @return STATUS status of execution.
  */
 STATUS signaling_connect(PSignalingClient pSignalingClient);
+
+STATUS signaling_joinSession(PSignalingClient pSignalingClient);
+
 /**
  * @brief send the message through the signaling channel when the signaling client is connected to the signaling channel.
  *

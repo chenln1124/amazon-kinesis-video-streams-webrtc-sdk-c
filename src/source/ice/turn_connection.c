@@ -230,7 +230,7 @@ static STATUS turn_connection_handleInboundStunError(PTurnConnection pTurnConnec
     CHK(pTurnConnection != NULL, STATUS_TURN_NULL_ARG);
     CHK(pBuffer != NULL && bufferLen > 0, STATUS_TURN_INVALID_INBOUND_STUN_ERROR_BUF);
     CHK(STUN_PACKET_IS_TYPE_ERROR(pBuffer), retStatus);
-    DLOGE("stun error packet type:0x%x", STUN_PACKET_GET_TYPE(pBuffer));
+    // DLOGE("stun error packet type:0x%x", STUN_PACKET_GET_TYPE(pBuffer));
 
     MUTEX_LOCK(pTurnConnection->lock);
     locked = TRUE;
@@ -259,7 +259,7 @@ static STATUS turn_connection_handleInboundStunError(PTurnConnection pTurnConnec
 
     switch (pStunAttributeErrorCode->errorCode) {
         case STUN_ERROR_UNAUTHORIZED:
-            DLOGE("Unauthorized");
+            // DLOGE("Unauthorized");
             CHK_STATUS(stun_attribute_getByType(pStunPacket, STUN_ATTRIBUTE_TYPE_NONCE, &pStunAttr));
             CHK_WARN(pStunAttr != NULL, retStatus, "No Nonce attribute found in Allocate Error response. Dropping Packet");
             pStunAttributeNonce = (PStunAttributeNonce) pStunAttr;

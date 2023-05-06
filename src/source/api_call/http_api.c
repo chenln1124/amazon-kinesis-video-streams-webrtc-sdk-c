@@ -29,9 +29,10 @@
 #define HTTP_API_EXIT()  // DLOGD("%s(%d) exit", __func__, __LINE__)
 
 #define HTTP_API_SECURE_PORT          "443"
-#define HTTP_API_CONNECTION_TIMEOUT   (2 * HUNDREDS_OF_NANOS_IN_A_SECOND)
-#define HTTP_API_COMPLETION_TIMEOUT   (5 * HUNDREDS_OF_NANOS_IN_A_SECOND)
+#define HTTP_API_CONNECTION_TIMEOUT   (20 * HUNDREDS_OF_NANOS_IN_A_SECOND)
+#define HTTP_API_COMPLETION_TIMEOUT   (50 * HUNDREDS_OF_NANOS_IN_A_SECOND)
 #define HTTP_API_CHANNEL_PROTOCOL     "\"WSS\", \"HTTPS\""
+#define HTTP_API_CHANNEL_PROTOCOL_W_MEDIA_STORAGE "\"WSS\", \"HTTPS\", \"WEBRTC\""
 #define HTTP_API_SEND_BUFFER_MAX_SIZE (4096)
 #define HTTP_API_RECV_BUFFER_MAX_SIZE (4096)
 
@@ -55,6 +56,10 @@
 #define HTTP_API_ROLE_ALIASES                   "/role-aliases"
 #define HTTP_API_CREDENTIALS                    "/credentials"
 #define HTTP_API_IOT_THING_NAME_HEADER          "x-amzn-iot-thingname"
+#define HTTP_API_JOIN_STORAGE_SESSION           "/joinStorageSession"
+#define HTTP_API_DESCRIBE_MEDIA_STORAGE_CONF    "/describeMediaStorageConfiguration"
+#define HTTP_API_UPDATE_MEDIA_STORAGE_CONF      "/updateMediaStorageConfiguration"
+
 /**
  * @brief   API_CreateSignalingChannel
  * POST /createSignalingChannel HTTP/1.1
@@ -93,6 +98,7 @@
  * }
  */
 #define HTTP_API_BODY_DESCRIBE_CHANNEL "{\n\t\"ChannelName\": \"%s\"\n}"
+#define HTTP_API_BODY_DESCRIBE_MEDIA_STORAGE_CONF "{\n\t\"ChannelARN\": \"%s\"\n}"
 /**
  * @brief   API_GetSignalingChannelEndpoint
  * POST /getSignalingChannelEndpoint HTTP/1.1
@@ -173,6 +179,18 @@
  */
 //#define HTTP_API_BODY_UPDATE_CHANNEL
 
+#define HTTP_API_BODY_JOIN_STORAGE_SESSION_MASTER "{\n\t\"channelArn\": \"%s\"\n}"
+
+#define HTTP_API_BODY_JOIN_STORAGE_SESSION_VIEWER                                                                                                    \
+    "{\n\t\"channelArn\": \"%s\","                                                                                                                   \
+    "\n\t\"clientId\": \"%s\"\n}"
+
+#define HTTP_API_BODY_UPDATE_STORAGE_CONFIG                                                                                                          \
+    "{\n\t\"StreamARN\": \"%s\","                                                                                                                    \
+    "\n\t\"ChannelARN\": \"%s\","                                                                                                                    \
+    "\n\t\"StorageStatus\": \"%s\""                                                                                                                  \
+    "\n}"
+
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
@@ -231,10 +249,13 @@ STATUS http_api_createChannel(PSignalingClient pSignalingClient, PUINT32 pHttpSt
 
     CHK_STATUS(NetIo_connect(xNetIoHandle, pHost, HTTP_API_SECURE_PORT));
 
+    // DLOGD("%s: %d, URL: %.*s.", __func__, __LINE__, urlLen, pUrl);
+    // DLOGD("%s: %d, SendBody: \n%.*s.", __func__, __LINE__, httpBodyLen, pHttpBody);
     CHK(NetIo_send(xNetIoHandle, (unsigned char*) pHttpSendBuffer, STRLEN((PCHAR) pHttpSendBuffer)) == STATUS_SUCCESS, STATUS_NET_SEND_DATA_FAILED);
     CHK_STATUS(NetIo_recv(xNetIoHandle, (unsigned char*) pHttpRecvBuffer, HTTP_API_RECV_BUFFER_MAX_SIZE, &uBytesReceived));
 
     CHK(uBytesReceived > 0, STATUS_NET_RECV_DATA_FAILED);
+    // DLOGD("%s: %d, RecvBuffer: %.*s.", __func__, __LINE__, uBytesReceived, pHttpRecvBuffer);
 
     CHK(http_parser_start(&pHttpRspCtx, (CHAR*) pHttpRecvBuffer, (UINT32) uBytesReceived, NULL) == STATUS_SUCCESS, STATUS_HTTP_PARSER_ERROR);
 
@@ -329,9 +350,12 @@ STATUS http_api_describeChannel(PSignalingClient pSignalingClient, PUINT32 pHttp
 
     CHK_STATUS(NetIo_connect(xNetIoHandle, pHost, HTTP_API_SECURE_PORT));
 
+    // DLOGD("%s: %d, URL: %.*s.", __func__, __LINE__, urlLen, pUrl);
+    // DLOGD("%s: %d, SendBody: \n%.*s.", __func__, __LINE__, httpBodyLen, pHttpBody);
     CHK(NetIo_send(xNetIoHandle, (unsigned char*) pHttpSendBuffer, STRLEN((PCHAR) pHttpSendBuffer)) == STATUS_SUCCESS, STATUS_NET_SEND_DATA_FAILED);
 
     CHK_STATUS(NetIo_recv(xNetIoHandle, (unsigned char*) pHttpRecvBuffer, HTTP_API_RECV_BUFFER_MAX_SIZE, &uBytesReceived));
+    // DLOGD("%s: %d, RecvBuffer: %.*s.", __func__, __LINE__, uBytesReceived, pHttpRecvBuffer);
 
     CHK(uBytesReceived > 0, STATUS_NET_RECV_DATA_FAILED);
 
@@ -403,17 +427,33 @@ STATUS http_api_getChannelEndpoint(PSignalingClient pSignalingClient, PUINT32 pH
     CHK(NULL != (pUrl = (PCHAR) MEMCALLOC(urlLen, 1)), STATUS_HTTP_NOT_ENOUGH_MEMORY);
     CHK(NULL != (pHttpSendBuffer = (uint8_t*) MEMCALLOC(HTTP_API_SEND_BUFFER_MAX_SIZE, 1)), STATUS_HTTP_NOT_ENOUGH_MEMORY);
     CHK(NULL != (pHttpRecvBuffer = (uint8_t*) MEMCALLOC(HTTP_API_RECV_BUFFER_MAX_SIZE, 1)), STATUS_HTTP_NOT_ENOUGH_MEMORY);
-    httpBodyLen = SIZEOF(HTTP_API_BODY_GET_CHANNEL_ENDPOINT) + STRLEN(pSignalingClient->channelDescription.channelArn) +
-        STRLEN(HTTP_API_CHANNEL_PROTOCOL) + STRLEN(getStringFromChannelRoleType(pChannelInfo->channelRoleType)) + 1;
+    if (pSignalingClient->pChannelInfo->useMediaStorage == FALSE || pSignalingClient->mediaStorageConfig.storageStatus == FALSE) {
+        httpBodyLen = SIZEOF(HTTP_API_BODY_GET_CHANNEL_ENDPOINT) + STRLEN(pSignalingClient->channelDescription.channelArn) +
+            STRLEN(HTTP_API_CHANNEL_PROTOCOL) + STRLEN(getStringFromChannelRoleType(pChannelInfo->channelRoleType)) + 1;
+    }
+    else
+    {
+        httpBodyLen = SIZEOF(HTTP_API_BODY_GET_CHANNEL_ENDPOINT) + STRLEN(pSignalingClient->channelDescription.channelArn) +
+            STRLEN(HTTP_API_CHANNEL_PROTOCOL_W_MEDIA_STORAGE) + STRLEN(getStringFromChannelRoleType(pChannelInfo->channelRoleType)) + 1;
+    }
+
     CHK(NULL != (pHttpBody = (PCHAR) MEMALLOC(httpBodyLen)), STATUS_HTTP_NOT_ENOUGH_MEMORY);
 
     // Create the API url
     CHK(SNPRINTF(pUrl, urlLen, "%s%s", pSignalingClient->pChannelInfo->pControlPlaneUrl, HTTP_API_GET_SIGNALING_CHANNEL_ENDPOINT) > 0,
         STATUS_HTTP_BUF_OVERFLOW);
     /* generate HTTP request body */
-    CHK(SNPRINTF(pHttpBody, httpBodyLen, HTTP_API_BODY_GET_CHANNEL_ENDPOINT, pSignalingClient->channelDescription.channelArn,
-                 HTTP_API_CHANNEL_PROTOCOL, getStringFromChannelRoleType(pChannelInfo->channelRoleType)) > 0,
-        STATUS_HTTP_BUF_OVERFLOW);
+    if (pSignalingClient->pChannelInfo->useMediaStorage == FALSE || pSignalingClient->mediaStorageConfig.storageStatus == FALSE) {
+        CHK(SNPRINTF(pHttpBody, httpBodyLen, HTTP_API_BODY_GET_CHANNEL_ENDPOINT, pSignalingClient->channelDescription.channelArn,
+                     HTTP_API_CHANNEL_PROTOCOL, getStringFromChannelRoleType(pChannelInfo->channelRoleType)) > 0,
+                     STATUS_HTTP_BUF_OVERFLOW);
+    }
+    else
+    {
+        CHK(SNPRINTF(pHttpBody, httpBodyLen, HTTP_API_BODY_GET_CHANNEL_ENDPOINT, pSignalingClient->channelDescription.channelArn,
+                     HTTP_API_CHANNEL_PROTOCOL_W_MEDIA_STORAGE, getStringFromChannelRoleType(pChannelInfo->channelRoleType)) > 0,
+                     STATUS_HTTP_BUF_OVERFLOW);
+    }
 
     // Create the request info with the body
     CHK_STATUS(request_info_create(pUrl, pHttpBody, pSignalingClient->pChannelInfo->pRegion, pSignalingClient->pChannelInfo->pCertPath, NULL, NULL,
@@ -431,10 +471,13 @@ STATUS http_api_getChannelEndpoint(PSignalingClient pSignalingClient, PUINT32 pH
 
     CHK_STATUS(NetIo_connect(xNetIoHandle, pHost, HTTP_API_SECURE_PORT));
 
+    // DLOGD("%s: %d, URL: %.*s.", __func__, __LINE__, urlLen, pUrl);
+    // DLOGD("%s: %d, SendBody: \n%.*s.", __func__, __LINE__, httpBodyLen, pHttpBody);
     CHK(NetIo_send(xNetIoHandle, (unsigned char*) pHttpSendBuffer, STRLEN((PCHAR) pHttpSendBuffer)) == STATUS_SUCCESS, STATUS_NET_SEND_DATA_FAILED);
     CHK_STATUS(NetIo_recv(xNetIoHandle, (unsigned char*) pHttpRecvBuffer, HTTP_API_RECV_BUFFER_MAX_SIZE, &uBytesReceived));
 
     CHK(uBytesReceived > 0, STATUS_NET_RECV_DATA_FAILED);
+    // DLOGD("%s: %d, RecvBuffer: %.*s.", __func__, __LINE__, uBytesReceived, pHttpRecvBuffer);
 
     CHK(http_parser_start(&pHttpRspCtx, (CHAR*) pHttpRecvBuffer, (UINT32) uBytesReceived, NULL) == STATUS_SUCCESS, STATUS_HTTP_PARSER_ERROR);
     pResponseStr = http_parser_getHttpBodyLocation(pHttpRspCtx);
@@ -542,10 +585,13 @@ STATUS http_api_getIceConfig(PSignalingClient pSignalingClient, PUINT32 pHttpSta
     }
     CHK_STATUS(NetIo_connect(xNetIoHandle, pHost, HTTP_API_SECURE_PORT));
 
+    // DLOGD("%s: %d, URL: %.*s.", __func__, __LINE__, urlLen, pUrl);
+    // DLOGD("%s: %d, SendBody: \n%.*s.", __func__, __LINE__, httpBodyLen, pHttpBody);
     CHK(NetIo_send(xNetIoHandle, (unsigned char*) pHttpSendBuffer, STRLEN((PCHAR) pHttpSendBuffer)) == STATUS_SUCCESS, STATUS_NET_SEND_DATA_FAILED);
     CHK_STATUS(NetIo_recv(xNetIoHandle, (unsigned char*) pHttpRecvBuffer, HTTP_API_RECV_BUFFER_MAX_SIZE, &uBytesReceived));
 
     CHK(uBytesReceived > 0, STATUS_NET_RECV_DATA_FAILED);
+    // DLOGD("%s: %d, RecvBuffer: %.*s.", __func__, __LINE__, uBytesReceived, pHttpRecvBuffer);
 
     CHK(http_parser_start(&pHttpRspCtx, (CHAR*) pHttpRecvBuffer, (UINT32) uBytesReceived, NULL) == STATUS_SUCCESS, STATUS_HTTP_PARSER_ERROR);
 
@@ -641,10 +687,13 @@ STATUS http_api_deleteChannel(PSignalingClient pSignalingClient, PUINT32 pHttpSt
 
     CHK_STATUS(NetIo_connect(xNetIoHandle, pHost, HTTP_API_SECURE_PORT));
 
+    // DLOGD("%s: %d, URL: %.*s.", __func__, __LINE__, urlLen, pUrl);
+    // DLOGD("%s: %d, SendBody: \n%.*s.", __func__, __LINE__, httpBodyLen, pHttpBody);
     CHK(NetIo_send(xNetIoHandle, (unsigned char*) pHttpSendBuffer, STRLEN((PCHAR) pHttpSendBuffer)) == STATUS_SUCCESS, STATUS_NET_SEND_DATA_FAILED);
     CHK_STATUS(NetIo_recv(xNetIoHandle, (unsigned char*) pHttpRecvBuffer, HTTP_API_RECV_BUFFER_MAX_SIZE, &uBytesReceived));
 
     CHK(uBytesReceived > 0, STATUS_NET_RECV_DATA_FAILED);
+    // DLOGD("%s: %d, RecvBuffer: %.*s.", __func__, __LINE__, uBytesReceived, pHttpRecvBuffer);
 
     CHK(http_parser_start(&pHttpRspCtx, (CHAR*) pHttpRecvBuffer, (UINT32) uBytesReceived, NULL) == STATUS_SUCCESS, STATUS_HTTP_PARSER_ERROR);
     uHttpStatusCode = http_parser_getHttpStatusCode(pHttpRspCtx);
@@ -746,9 +795,12 @@ STATUS http_api_getIotCredential(PIotCredentialProvider pIotCredentialProvider)
     CHK_STATUS(NetIo_connectWithX509Path(xNetIoHandle, pHost, HTTP_API_SECURE_PORT, pIotCredentialProvider->caCertPath,
                                          pIotCredentialProvider->certPath, pIotCredentialProvider->privateKeyPath));
 
+    // DLOGD("%s: %d, URL: %.*s.", __func__, __LINE__, urlLen, pUrl);
+    // DLOGD("%s: %d, SendBody: \n%.*s.", __func__, __LINE__, httpBodyLen, pHttpBody);
     CHK(NetIo_send(xNetIoHandle, (unsigned char*) pHttpSendBuffer, STRLEN((PCHAR) pHttpSendBuffer)) == STATUS_SUCCESS, STATUS_NET_SEND_DATA_FAILED);
 
     CHK_STATUS(NetIo_recv(xNetIoHandle, (unsigned char*) pHttpRecvBuffer, HTTP_API_RECV_BUFFER_MAX_SIZE, &uBytesReceived));
+    // DLOGD("%s: %d, RecvBuffer: %.*s.", __func__, __LINE__, uBytesReceived, pHttpRecvBuffer);
 
     CHK(uBytesReceived > 0, STATUS_NET_RECV_DATA_FAILED);
 
@@ -776,6 +828,225 @@ CleanUp:
 
     if (pHttpRspCtx != NULL) {
         if (http_parser_detroy(pHttpRspCtx) != STATUS_SUCCESS) {
+            DLOGE("destroying http parset failed. \n");
+        }
+    }
+    SAFE_MEMFREE(pHttpBody);
+    SAFE_MEMFREE(pHost);
+    SAFE_MEMFREE(pUrl);
+    SAFE_MEMFREE(pHttpSendBuffer);
+    SAFE_MEMFREE(pHttpRecvBuffer);
+    request_info_free(&pRequestInfo);
+    HTTP_API_EXIT();
+    return retStatus;
+}
+
+STATUS http_api_joinStorageSession(PSignalingClient pSignalingClient, PUINT32 pHttpStatusCode)
+{
+    HTTP_API_ENTER();
+    STATUS retStatus = STATUS_SUCCESS;
+    PChannelInfo pChannelInfo = pSignalingClient->pChannelInfo;
+
+    /* Variables for network connection */
+    UINT32 uBytesReceived = 0;
+
+    /* Variables for HTTP request */
+    // http req.
+    PCHAR pUrl = NULL;
+    UINT32 urlLen;
+    PRequestInfo pRequestInfo = NULL;
+    PCHAR pHttpBody = NULL;
+    UINT32 httpBodyLen;
+    PCHAR pHost = NULL;
+    // rsp
+    UINT32 uHttpStatusCode = 0;
+    HttpResponseContext* pHttpRspCtx = NULL;
+    PCHAR pResponseStr;
+    UINT32 resultLen;
+    // new net io.
+    NetIoHandle xNetIoHandle = NULL;
+    uint8_t* pHttpSendBuffer = NULL;
+    UINT32 uSendBufLen = HTTP_API_SEND_BUFFER_MAX_SIZE;
+    uint8_t* pHttpRecvBuffer = NULL;
+
+    CHK(NULL != (pHost = (PCHAR) MEMCALLOC(MAX_CONTROL_PLANE_URI_CHAR_LEN, 1)), STATUS_HTTP_NOT_ENOUGH_MEMORY);
+    urlLen = STRLEN(pSignalingClient->channelDescription.channelEndpointWebrtc) + STRLEN(HTTP_API_JOIN_STORAGE_SESSION) + 1;
+    CHK(NULL != (pUrl = (PCHAR) MEMCALLOC(urlLen, 1)), STATUS_HTTP_NOT_ENOUGH_MEMORY);
+    if (pSignalingClient->pChannelInfo->channelRoleType == SIGNALING_CHANNEL_ROLE_TYPE_VIEWER) {
+        httpBodyLen = SIZEOF(HTTP_API_BODY_JOIN_STORAGE_SESSION_VIEWER) + STRLEN(pSignalingClient->channelDescription.channelArn) +
+            STRLEN(pSignalingClient->clientInfo.signalingClientInfo.clientId) + 1;
+    } else {
+        httpBodyLen = SIZEOF(HTTP_API_BODY_JOIN_STORAGE_SESSION_MASTER) + STRLEN(pSignalingClient->channelDescription.channelArn) + 1;
+    }
+    CHK(NULL != (pHttpBody = (PCHAR) MEMALLOC(httpBodyLen)), STATUS_HTTP_NOT_ENOUGH_MEMORY);
+    CHK(NULL != (pHttpSendBuffer = (uint8_t*) MEMCALLOC(uSendBufLen, 1)), STATUS_HTTP_NOT_ENOUGH_MEMORY);
+    CHK(NULL != (pHttpRecvBuffer = (uint8_t*) MEMCALLOC(HTTP_API_RECV_BUFFER_MAX_SIZE, 1)), STATUS_HTTP_NOT_ENOUGH_MEMORY);
+
+    CHK(SNPRINTF(pUrl, urlLen, "%s%s", pSignalingClient->channelDescription.channelEndpointWebrtc, HTTP_API_JOIN_STORAGE_SESSION) > 0,
+        STATUS_HTTP_BUF_OVERFLOW);
+    /* generate HTTP request body */
+    if (pSignalingClient->pChannelInfo->channelRoleType == SIGNALING_CHANNEL_ROLE_TYPE_VIEWER) {
+        CHK(SNPRINTF(pHttpBody, httpBodyLen, HTTP_API_BODY_JOIN_STORAGE_SESSION_VIEWER, pSignalingClient->channelDescription.channelArn,
+                     pSignalingClient->clientInfo.signalingClientInfo.clientId) > 0,
+                     STATUS_HTTP_BUF_OVERFLOW);
+    } else {
+        CHK(SNPRINTF(pHttpBody, httpBodyLen, HTTP_API_BODY_JOIN_STORAGE_SESSION_MASTER, pSignalingClient->channelDescription.channelArn) > 0,
+                     STATUS_HTTP_BUF_OVERFLOW);
+    }
+
+    // Create the request info with the body
+    CHK_STATUS(request_info_create(pUrl, pHttpBody, pSignalingClient->pChannelInfo->pRegion, pSignalingClient->pChannelInfo->pCertPath, NULL, NULL,
+                                   SSL_CERTIFICATE_TYPE_NOT_SPECIFIED, pSignalingClient->pChannelInfo->pUserAgent, HTTP_API_CONNECTION_TIMEOUT,
+                                   HTTP_API_COMPLETION_TIMEOUT, DEFAULT_LOW_SPEED_LIMIT, DEFAULT_LOW_SPEED_TIME_LIMIT,
+                                   pSignalingClient->pAwsCredentials, &pRequestInfo));
+
+    /* Initialize and generate HTTP request, then send it. */
+    CHK(NULL != (xNetIoHandle = NetIo_create()), STATUS_HTTP_NOT_ENOUGH_MEMORY);
+    CHK_STATUS(NetIo_setRecvTimeout(xNetIoHandle, HTTP_API_COMPLETION_TIMEOUT));
+    CHK_STATUS(NetIo_setSendTimeout(xNetIoHandle, HTTP_API_COMPLETION_TIMEOUT));
+
+    CHK_STATUS(http_req_pack(pRequestInfo, HTTP_REQUEST_VERB_POST_STRING, pHost, MAX_CONTROL_PLANE_URI_CHAR_LEN, (PCHAR) pHttpSendBuffer,
+                             uSendBufLen, FALSE, TRUE, NULL));
+
+    CHK_STATUS(NetIo_connect(xNetIoHandle, pHost, HTTP_API_SECURE_PORT));
+
+    // DLOGD("%s: %d, URL: %.*s.", __func__, __LINE__, urlLen, pUrl);
+    // DLOGD("%s: %d, SendBody: \n%.*s.", __func__, __LINE__, httpBodyLen, pHttpBody);
+    CHK(NetIo_send(xNetIoHandle, (unsigned char*) pHttpSendBuffer, STRLEN((PCHAR) pHttpSendBuffer)) == STATUS_SUCCESS, STATUS_NET_SEND_DATA_FAILED);
+    CHK_STATUS(NetIo_recv(xNetIoHandle, (unsigned char*) pHttpRecvBuffer, HTTP_API_RECV_BUFFER_MAX_SIZE, &uBytesReceived));
+
+    CHK(uBytesReceived > 0, STATUS_NET_RECV_DATA_FAILED);
+    // DLOGD("%s: %d, RecvBuffer: %.*s.", __func__, __LINE__, uBytesReceived, pHttpRecvBuffer);
+
+    CHK(http_parser_start(&pHttpRspCtx, (CHAR*) pHttpRecvBuffer, (UINT32) uBytesReceived, NULL) == STATUS_SUCCESS, STATUS_HTTP_PARSER_ERROR);
+
+    pResponseStr = http_parser_getHttpBodyLocation(pHttpRspCtx);
+    resultLen = http_parser_getHttpBodyLength(pHttpRspCtx);
+    uHttpStatusCode = http_parser_getHttpStatusCode(pHttpRspCtx);
+
+    /* Check HTTP results */
+    CHK(uHttpStatusCode == HTTP_STATUS_OK, STATUS_HTTP_STATUS_CODE_ERROR);
+
+CleanUp:
+    CHK_LOG_ERR(retStatus);
+
+    if (pHttpStatusCode != NULL) {
+        *pHttpStatusCode = uHttpStatusCode;
+    }
+
+    if (xNetIoHandle != NULL) {
+        NetIo_disconnect(xNetIoHandle);
+        NetIo_terminate(xNetIoHandle);
+    }
+
+    if (pHttpRspCtx != NULL) {
+        retStatus = http_parser_detroy(pHttpRspCtx);
+        if (retStatus != STATUS_SUCCESS) {
+            DLOGE("destroying http parset failed. \n");
+        }
+    }
+    SAFE_MEMFREE(pHttpBody);
+    SAFE_MEMFREE(pHost);
+    SAFE_MEMFREE(pUrl);
+    SAFE_MEMFREE(pHttpSendBuffer);
+    SAFE_MEMFREE(pHttpRecvBuffer);
+    request_info_free(&pRequestInfo);
+    HTTP_API_EXIT();
+    return retStatus;
+}
+
+STATUS http_api_describeMediaStorageConf(PSignalingClient pSignalingClient, PUINT32 pHttpStatusCode)
+{
+    HTTP_API_ENTER();
+    STATUS retStatus = STATUS_SUCCESS;
+    PChannelInfo pChannelInfo = pSignalingClient->pChannelInfo;
+
+    /* Variables for network connection */
+    UINT32 uBytesReceived = 0;
+
+    /* Variables for HTTP request */
+    // http req.
+    PCHAR pUrl = NULL;
+    UINT32 urlLen;
+    PRequestInfo pRequestInfo = NULL;
+    PCHAR pHttpBody = NULL;
+    UINT32 httpBodyLen;
+    PCHAR pHost = NULL;
+    // rsp
+    UINT32 uHttpStatusCode = 0;
+    HttpResponseContext* pHttpRspCtx = NULL;
+    PCHAR pResponseStr;
+    UINT32 resultLen;
+    // new net io.
+    NetIoHandle xNetIoHandle = NULL;
+    uint8_t* pHttpSendBuffer = NULL;
+    UINT32 uSendBufLen = HTTP_API_SEND_BUFFER_MAX_SIZE;
+    uint8_t* pHttpRecvBuffer = NULL;
+
+    CHK(NULL != (pHost = (PCHAR) MEMCALLOC(MAX_CONTROL_PLANE_URI_CHAR_LEN, 1)), STATUS_HTTP_NOT_ENOUGH_MEMORY);
+    urlLen = STRLEN(pSignalingClient->pChannelInfo->pControlPlaneUrl) + STRLEN(HTTP_API_DESCRIBE_MEDIA_STORAGE_CONF) + 1;
+    CHK(NULL != (pUrl = (PCHAR) MEMCALLOC(urlLen, 1)), STATUS_HTTP_NOT_ENOUGH_MEMORY);
+    httpBodyLen = SIZEOF(HTTP_API_BODY_DESCRIBE_MEDIA_STORAGE_CONF) + STRLEN(pSignalingClient->channelDescription.channelArn) + 1;
+    CHK(NULL != (pHttpBody = (PCHAR) MEMALLOC(httpBodyLen)), STATUS_HTTP_NOT_ENOUGH_MEMORY);
+    CHK(NULL != (pHttpSendBuffer = (uint8_t*) MEMCALLOC(uSendBufLen, 1)), STATUS_HTTP_NOT_ENOUGH_MEMORY);
+    CHK(NULL != (pHttpRecvBuffer = (uint8_t*) MEMCALLOC(HTTP_API_RECV_BUFFER_MAX_SIZE, 1)), STATUS_HTTP_NOT_ENOUGH_MEMORY);
+
+    CHK(SNPRINTF(pUrl, urlLen, "%s%s", pSignalingClient->pChannelInfo->pControlPlaneUrl, HTTP_API_DESCRIBE_MEDIA_STORAGE_CONF) > 0,
+        STATUS_HTTP_BUF_OVERFLOW);
+    /* generate HTTP request body */
+    CHK(SNPRINTF(pHttpBody, httpBodyLen, HTTP_API_BODY_DESCRIBE_MEDIA_STORAGE_CONF, pSignalingClient->channelDescription.channelArn) > 0,
+                 STATUS_HTTP_BUF_OVERFLOW);
+
+    // Create the request info with the body
+    CHK_STATUS(request_info_create(pUrl, pHttpBody, pSignalingClient->pChannelInfo->pRegion, pSignalingClient->pChannelInfo->pCertPath, NULL, NULL,
+                                   SSL_CERTIFICATE_TYPE_NOT_SPECIFIED, pSignalingClient->pChannelInfo->pUserAgent, HTTP_API_CONNECTION_TIMEOUT,
+                                   HTTP_API_COMPLETION_TIMEOUT, DEFAULT_LOW_SPEED_LIMIT, DEFAULT_LOW_SPEED_TIME_LIMIT,
+                                   pSignalingClient->pAwsCredentials, &pRequestInfo));
+
+    /* Initialize and generate HTTP request, then send it. */
+    CHK(NULL != (xNetIoHandle = NetIo_create()), STATUS_HTTP_NOT_ENOUGH_MEMORY);
+    CHK_STATUS(NetIo_setRecvTimeout(xNetIoHandle, HTTP_API_COMPLETION_TIMEOUT));
+    CHK_STATUS(NetIo_setSendTimeout(xNetIoHandle, HTTP_API_COMPLETION_TIMEOUT));
+
+    CHK_STATUS(http_req_pack(pRequestInfo, HTTP_REQUEST_VERB_POST_STRING, pHost, MAX_CONTROL_PLANE_URI_CHAR_LEN, (PCHAR) pHttpSendBuffer,
+                             uSendBufLen, FALSE, TRUE, NULL));
+
+    CHK_STATUS(NetIo_connect(xNetIoHandle, pHost, HTTP_API_SECURE_PORT));
+
+    // DLOGD("%s: %d, URL: %.*s.", __func__, __LINE__, urlLen, pUrl);
+    // DLOGD("%s: %d, SendBody: \n%.*s.", __func__, __LINE__, httpBodyLen, pHttpBody);
+    CHK(NetIo_send(xNetIoHandle, (unsigned char*) pHttpSendBuffer, STRLEN((PCHAR) pHttpSendBuffer)) == STATUS_SUCCESS, STATUS_NET_SEND_DATA_FAILED);
+    CHK_STATUS(NetIo_recv(xNetIoHandle, (unsigned char*) pHttpRecvBuffer, HTTP_API_RECV_BUFFER_MAX_SIZE, &uBytesReceived));
+
+    CHK(uBytesReceived > 0, STATUS_NET_RECV_DATA_FAILED);
+    // DLOGD("%s: %d, RecvBuffer: %.*s.", __func__, __LINE__, uBytesReceived, pHttpRecvBuffer);
+
+    CHK(http_parser_start(&pHttpRspCtx, (CHAR*) pHttpRecvBuffer, (UINT32) uBytesReceived, NULL) == STATUS_SUCCESS, STATUS_HTTP_PARSER_ERROR);
+
+    pResponseStr = http_parser_getHttpBodyLocation(pHttpRspCtx);
+    resultLen = http_parser_getHttpBodyLength(pHttpRspCtx);
+    uHttpStatusCode = http_parser_getHttpStatusCode(pHttpRspCtx);
+
+    /* Check HTTP results */
+    CHK(uHttpStatusCode == HTTP_STATUS_OK && resultLen != 0 && pResponseStr != NULL, STATUS_HTTP_STATUS_CODE_ERROR);
+    CHK(http_api_rsp_describeMediaStorageConf((const CHAR*) pResponseStr, resultLen, pSignalingClient) == STATUS_SUCCESS, STATUS_HTTP_RSP_ERROR);
+    /* We got a success response here. */
+
+CleanUp:
+    CHK_LOG_ERR(retStatus);
+
+    if (pHttpStatusCode != NULL) {
+        *pHttpStatusCode = uHttpStatusCode;
+    }
+
+    if (xNetIoHandle != NULL) {
+        NetIo_disconnect(xNetIoHandle);
+        NetIo_terminate(xNetIoHandle);
+    }
+
+    if (pHttpRspCtx != NULL) {
+        retStatus = http_parser_detroy(pHttpRspCtx);
+        if (retStatus != STATUS_SUCCESS) {
             DLOGE("destroying http parset failed. \n");
         }
     }

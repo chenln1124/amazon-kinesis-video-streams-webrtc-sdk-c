@@ -119,6 +119,7 @@ STATUS wss_api_connect(PSignalingClient pSignalingClient, PUINT32 pHttpStatusCod
 
     CHK_STATUS(NetIo_connect(xNetIoHandle, pHost, WSS_API_SECURE_PORT));
 
+    // DLOGD("%s: %d, URL: %.*s.", __func__, __LINE__, urlLen, pUrl);
     CHK(NetIo_send(xNetIoHandle, (unsigned char*) pHttpSendBuffer, STRLEN((PCHAR) pHttpSendBuffer)) == STATUS_SUCCESS, STATUS_NET_SEND_DATA_FAILED);
     CHK_STATUS(NetIo_recv(xNetIoHandle, (unsigned char*) pHttpRecvBuffer, WSS_API_RECV_BUFFER_MAX_SIZE, &uBytesReceived));
 
@@ -214,7 +215,7 @@ STATUS wss_api_send(PSignalingClient pSignalingClient, PBYTE pSendBuf, UINT32 bu
     CHK(pSignalingClient != NULL, STATUS_WSS_API_MISSING_SIGNALING_CLIENT);
     CHK(pSignalingClient->pWssContext != NULL, STATUS_WSS_API_MISSING_CONTEXT);
 
-    DLOGD("Sending data over web socket: %s", pSendBuf);
+    // DLOGD("Sending data over web socket: %s", pSendBuf);
     CHK_STATUS(wss_client_sendText(pSignalingClient->pWssContext, pSendBuf, bufLen));
 
 CleanUp:

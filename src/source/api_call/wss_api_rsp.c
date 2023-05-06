@@ -46,6 +46,7 @@ STATUS wss_api_rsp_receivedMessage(const CHAR* pMessage, UINT32 messageLen, PSig
 
     pSignalingMessageWrapper->receivedSignalingMessage.signalingMessage.version = SIGNALING_MESSAGE_CURRENT_VERSION;
 
+    // DLOGD("%s: %d, pMessage: %.*s.", __func__, __LINE__, messageLen, pMessage);
     // Loop through the tokens and extract the stream description
     for (i = 1; i < tokenCount; i++) {
         if (compareJsonString(pMessage, &pTokens[i], JSMN_STRING, (PCHAR) "senderClientId")) {
@@ -117,6 +118,7 @@ STATUS wss_api_rsp_receivedMessage(const CHAR* pMessage, UINT32 messageLen, PSig
     }
     // Message type is a mandatory field.
     CHK(parsedMessageType, STATUS_SIGNALING_INVALID_MESSAGE_TYPE);
+    // DLOGD("Client received message of type: %d", pSignalingMessageWrapper->receivedSignalingMessage.signalingMessage.messageType);
 
 CleanUp:
     SAFE_MEMFREE(pTokens);
