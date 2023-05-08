@@ -6,8 +6,14 @@
 
 /**  https://tools.ietf.org/html/rfc5764#section-4.1.2 */
 mbedtls_ssl_srtp_profile DTLS_SRTP_SUPPORTED_PROFILES[] = {
+#ifdef MBEDTLS_VERSION_2_25_X
+    MBEDTLS_TLS_SRTP_AES128_CM_HMAC_SHA1_80,
+    MBEDTLS_TLS_SRTP_AES128_CM_HMAC_SHA1_32,
+    MBEDTLS_TLS_SRTP_UNSET,
+#else
     MBEDTLS_SRTP_AES128_CM_HMAC_SHA1_80,
     MBEDTLS_SRTP_AES128_CM_HMAC_SHA1_32,
+#endif
 };
 
 STATUS dtls_session_create(PDtlsSessionCallbacks pDtlsSessionCallbacks, TIMER_QUEUE_HANDLE timerQueueHandle, INT32 certificateBits,
@@ -281,9 +287,13 @@ STATUS dtls_session_start(PDtlsSession pDtlsSession, BOOL isServer)
         CHK(mbedtls_ssl_conf_own_cert(&pDtlsSession->sslCtxConfig, &pCertInfo->cert, &pCertInfo->privateKey) == 0, STATUS_DTLS_CREATE_SSL_FAILED);
     }
     mbedtls_ssl_conf_dtls_cookies(&pDtlsSession->sslCtxConfig, NULL, NULL, NULL);
+#ifdef MBEDTLS_VERSION_2_25_X
+    CHK(mbedtls_ssl_conf_dtls_srtp_protection_profiles(&pDtlsSession->sslCtxConfig, DTLS_SRTP_SUPPORTED_PROFILES) == 0, STATUS_DTLS_CREATE_SSL_FAILED);
+#else
     CHK(mbedtls_ssl_conf_dtls_srtp_protection_profiles(&pDtlsSession->sslCtxConfig, DTLS_SRTP_SUPPORTED_PROFILES,
                                                        ARRAY_SIZE(DTLS_SRTP_SUPPORTED_PROFILES)) == 0,
         STATUS_DTLS_CREATE_SSL_FAILED);
+#endif
     mbedtls_ssl_conf_export_keys_ext_cb(&pDtlsSession->sslCtxConfig, (mbedtls_ssl_export_keys_ext_t*) dtls_session_deriveKeyCallback, pDtlsSession);
 
     CHK(mbedtls_ssl_setup(&pDtlsSession->sslCtx, &pDtlsSession->sslCtxConfig) == 0, STATUS_DTLS_SSL_CTX_CREATION_FAILED);
@@ -414,7 +424,7 @@ CleanUp:
     }
 
     LEAVES();
-    return STATUS_SUCCESS;
+    return retStatus;
 }
 
 STATUS dtls_session_getLocalCertificateFingerprint(PDtlsSession pDtlsSession, PCHAR pBuff, UINT32 buffLen)
@@ -477,7 +487,11 @@ STATUS dtls_session_populateKeyingMaterial(PDtlsSession pDtlsSession, PDtlsKeyin
     BOOL locked = FALSE;
     PTlsKeys pKeys;
     BYTE keyingMaterialBuffer[MAX_SRTP_MASTER_KEY_LEN * 2 + MAX_SRTP_SALT_KEY_LEN * 2];
+#ifdef MBEDTLS_VERSION_2_25_X
+    mbedtls_dtls_srtp_info negotiatedSRTPProfile;
+#else
     mbedtls_ssl_srtp_profile negotiatedSRTPProfile;
+#endif
 
     CHK(pDtlsSession != NULL && pDtlsKeyingMaterial != NULL, STATUS_DTLS_NULL_ARG);
     pKeys = &pDtlsSession->tlsKeys;
@@ -502,6 +516,19 @@ STATUS dtls_session_populateKeyingMaterial(PDtlsSession pDtlsSession, PDtlsKeyin
 
     MEMCPY(pDtlsKeyingMaterial->serverWriteKey + MAX_SRTP_MASTER_KEY_LEN, &keyingMaterialBuffer[offset], MAX_SRTP_SALT_KEY_LEN);
 
+#ifdef MBEDTLS_VERSION_2_25_X
+    mbedtls_ssl_get_dtls_srtp_negotiation_result(&pDtlsSession->sslCtx, &negotiatedSRTPProfile);
+    switch (negotiatedSRTPProfile.chosen_dtls_srtp_profile) {
+        case MBEDTLS_TLS_SRTP_AES128_CM_HMAC_SHA1_80:
+            pDtlsKeyingMaterial->srtpProfile = KVS_SRTP_PROFILE_AES128_CM_HMAC_SHA1_80;
+            break;
+        case MBEDTLS_TLS_SRTP_AES128_CM_HMAC_SHA1_32:
+            pDtlsKeyingMaterial->srtpProfile = KVS_SRTP_PROFILE_AES128_CM_HMAC_SHA1_32;
+            break;
+        default:
+            CHK(FALSE, STATUS_DTLS_UNKNOWN_SRTP_PROFILE);
+    }
+#else
     negotiatedSRTPProfile = mbedtls_ssl_get_dtls_srtp_protection_profile(&pDtlsSession->sslCtx);
     switch (negotiatedSRTPProfile) {
         case MBEDTLS_SRTP_AES128_CM_HMAC_SHA1_80:
@@ -513,6 +540,7 @@ STATUS dtls_session_populateKeyingMaterial(PDtlsSession pDtlsSession, PDtlsKeyin
         default:
             CHK(FALSE, STATUS_DTLS_UNKNOWN_SRTP_PROFILE);
     }
+#endif
 
 CleanUp:
     if (locked) {

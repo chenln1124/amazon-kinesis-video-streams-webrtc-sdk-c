@@ -88,6 +88,8 @@ if(USE_OPENSSL)
   add_definitions(-DKVS_USE_OPENSSL)
 elseif(USE_MBEDTLS)
   add_definitions(-DKVS_USE_MBEDTLS)
+  #define MBEDTLS_VERSION_2_25_X when using mbedtls version >= 2.25.0
+  add_definitions(-DMBEDTLS_VERSION_2_25_X)
 endif()
 
 if(BUILD_DEPENDENCIES)
